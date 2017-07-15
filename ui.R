@@ -18,7 +18,7 @@ shinyUI(navbarPage(
                          sidebarLayout(
                                  sidebarPanel(
                                          selectInput("project",
-                                                     "Project Name",
+                                                     "Project name",
                                                      choices = rawData[, .(project = unique(project))]$project),
                                          uiOutput("reportPeriod"),
                                          uiOutput("reportWindow")
@@ -41,6 +41,7 @@ shinyUI(navbarPage(
                          tags$div(
                                  checked = NA,
                                  tags$h1("Software Maintenance Activities"),
+                                 tags$br(),
                                  tags$p(
                                          "The research community has identified 3 main code maintenance activities:"
                                  ),

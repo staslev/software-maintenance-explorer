@@ -19,7 +19,7 @@ shinyServer(function(input, output, clientData, session) {
                 
                 dateRangeInput(
                         "reportDateRange",
-                        "Period",
+                        "Period of interest",
                         start  = vals$prjStart,
                         min  = vals$prjStart,
                         end    = vals$prjEnd,
@@ -52,7 +52,7 @@ shinyServer(function(input, output, clientData, session) {
                 
                 sliderInput(
                         "reportWindowSize",
-                        "Activity Bucket",
+                        "Activity bucket",
                         min = step,
                         max = max,
                         value = value,
@@ -100,13 +100,13 @@ shinyServer(function(input, output, clientData, session) {
                         tabsetPanel(
                                 id = "menu",
                                 tabPanel(
-                                        "Project-Overview",
+                                        "Project-Evolution",
                                         htmlOutput("clickHelp"),
                                         plotlyOutput("maintBars"),
                                         dataTableOutput("selectedData")
                                 ),
                                 tabPanel(
-                                        "Developer-Info",
+                                        "Developer-Evolution",
                                         tableOutput("myText1")
                                 ),
                                 tabPanel(
@@ -178,7 +178,7 @@ shinyServer(function(input, output, clientData, session) {
                                 as.POSIXct(date, origin =  "1970-01-01"),
                                 '%m/%d/%y'
                         ),
-                        Class = predictedCat,
+                        Class = ifelse(predictedCat == "a", "Adaptive", ifelse(predictedCat == "c", "Corrective", "Perfective")),
                         Comment = gsub("\\[PATCH \\d+/\\d+\\] ", "", comment)
                 )]
         }, options = list(
