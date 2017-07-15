@@ -5,6 +5,7 @@
 #
 
 library(shiny)
+library(plotly)
 library(data.table)
 
 shinyUI(navbarPage(
@@ -69,8 +70,8 @@ shinyUI(navbarPage(
                                          )
                                  ),
                                  tags$p(
-                                         tags$span("For more information about our research "),
-                                         tags$a(href = "https://www.researchgate.net/project/Software-Evolution-Maintenance-via-Fine-Grained-Source-Code-Changes", "click here.")
+                                         tags$span("For more information about our research visit the project's"),
+                                         tags$a(href = "https://www.researchgate.net/project/Software-Evolution-Maintenance-via-Fine-Grained-Source-Code-Changes", "ResearchGate page.")
                                  ),
                                  tags$p("Feel free to contact us for any question, suggestion, or feedback.")
                          )

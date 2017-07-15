@@ -5,14 +5,21 @@
 #
 
 library(shiny)
+library(plotly)
 library(ggplot2)
 
 shinyServer(function(input, output, clientData, session) {
-        
         vals = reactiveValues()
         vals$prjStart = NULL
         vals$prjEnd = NULL
         
+        output$event <- renderPrint({
+                d <- event_data("plotly_hover")
+                if (is.null(d))
+                        "Hover on a point!"
+                else
+                        d
+        })
         
         output$reportPeriod = renderUI({
                 if (!isTruthy(vals$prjStart) || !isTruthy(vals$prjEnd)) {
@@ -32,9 +39,7 @@ shinyServer(function(input, output, clientData, session) {
         })
         
         output$reportWindow = renderUI({
-                
-                
-                if (!isTruthy(input$reportDateRange) || 
+                if (!isTruthy(input$reportDateRange) ||
                     !isTruthy(input$reportDateRange[1]) ||
                     !isTruthy(input$reportDateRange[2])) {
                         return(NULL)
@@ -47,7 +52,8 @@ shinyServer(function(input, output, clientData, session) {
                 max_floor = floor(as.numeric(diff) / step) * step
                 max = max_floor + step
                 prevValue = isolate(input$reportWindowSize)
-                value = if(isTruthy(prevValue) && prevValue <= max) {
+                value = if (isTruthy(prevValue) &&
+                            prevValue <= max) {
                         prevValue
                 } else {
                         max(step, step * 4)
@@ -83,57 +89,77 @@ shinyServer(function(input, output, clientData, session) {
                                 id = "menu",
                                 tabPanel(
                                         "Project-Overview",
-                                        plotOutput("maintBars")
+                                        plotlyOutput("maintBars")
                                 ),
                                 tabPanel(
                                         "Developer-Info",
                                         tableOutput("myText1")
                                 ),
-                                tabPanel("Raw-Data",
-                                         tableOutput("myText2"))
+                                tabPanel(
+                                        "Raw-Data",
+                                        dataTableOutput("rawDataTable")
+                                )
                         )
                 })
                 
                 
-                output$maintBars = renderPlot({
-                        if(!isTruthy(input$reportWindowSize)) {
+                output$maintBars = renderPlotly({
+                        if (!isTruthy(input$reportWindowSize)) {
                                 return(NULL)
                         }
                         
                         window = input$reportWindowSize * 24 * 60 * 60
                         min = as.numeric(as.POSIXct(input$reportDateRange[1]))
                         max = as.numeric(as.POSIXct(input$reportDateRange[2]))
-                        melted = melt(rawData[project == input$project & date >= min & date <= max,
-                                              .(
-                                                      Adaptive = sum(predictedCat == "a"),
-                                                      Corrective = sum(predictedCat == "c"),
-                                                      Perfective = sum(predictedCat == "p")
-                                              ),
-                                              by = list(date = min + (floor((date - min) / window) * window))],
-                                      id = c("date"))
+                        agg = rawData[project == input$project &
+                                              date >= min &
+                                              date <= max,
+                                      .(
+                                              Adaptive = sum(predictedCat == "a"),
+                                              Corrective = sum(predictedCat == "c"),
+                                              Perfective = sum(predictedCat == "p")
+                                      ),
+                                      by = list(date = as.Date(
+                                              as.POSIXct(min + (
+                                                      floor((date - min) / window) * window
+                                              ), origin = "1970-01-01")
+                                      ))]
                         
-                        ggplot(data = melted, aes(x = as.Date(as.POSIXct(date, origin = "1970-01-01")), y = value, fill = variable)) + 
-                                geom_bar(stat = "identity") +
-                                ylab("Commits") + 
-                                ggtitle(paste0("\n", "Project: ", input$project, "\n")) +
-                                theme(
-                                        legend.position = "top",
-                                        legend.title = element_blank(),
-                                        axis.text = element_text(size = 12),
-                                        axis.title.x = element_blank(),
-                                        axis.title.y = element_text(size = 18),
-                                        legend.text = element_text(size = 15),
-                                        axis.text.x = element_text(angle = 90, hjust = 1),
-                                        plot.title = element_text(size=22, hjust = 0.5)
-                                ) + 
-                                scale_fill_brewer(palette="Set1") + 
-                                scale_x_date(breaks = as.Date(as.POSIXct(melted$date, origin =  "1970-01-01")))
+                        plot_ly(
+                                agg,
+                                x = ~ date,
+                                y = ~ Adaptive,
+                                name = 'Adaptive',
+                                type = 'bar'
+                        ) %>%
+                                add_trace(y = ~ Perfective,
+                                          name = 'Perfective') %>%
+                                add_trace(y = ~ Corrective,
+                                          name = 'Corrective') %>%
+                                layout(
+                                        yaxis = list(title = 'Commits'),
+                                        barmode = 'stack',
+                                        xaxis = list(
+                                                tickvals = agg$date,
+                                                tickangle = 45,
+                                                title = "",
+                                                tickformat = "%d-%m-%Y"
+                                        ),
+                                        margin = list(b = 150)
+                                )  %>%
+                                config(displayModeBar = F)
                 })
                 output$myText1 = renderText({
                         "bla bla bla1 "
                 })
-                output$myText2 = renderText({
-                        "bla bla bla2 "
-                })
+                output$rawDataTable = renderDataTable({
+                        x  = 1
+                        rawData[project == input$project, .(
+                                CommitId = commitId,
+                                Date = as.Date(as.POSIXct(date, origin =  "1970-01-01"), '%m/%d/%y'),
+                                Class = predictedCat,
+                                Comment = gsub("\\[PATCH \\d+/\\d+\\] ", "", comment)
+                        )]
+                }, options = list(searching = FALSE, lengthChange = FALSE))
         })
 })
