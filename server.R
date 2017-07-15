@@ -71,13 +71,27 @@ shinyServer(function(input, output, clientData, session) {
                 vals$prjEnd = as.Date(as.POSIXct(end, origin = origin))
         })
         
+        output$rawDataTableHelp = renderUI(tags$div(
+                tags$br(),
+                tags$span(
+                        "Raw commit data for project ",
+                        tags$b(input$project),
+                        "dating ",
+                        "from ", 
+                        tags$b(input$reportDateRange[1]),
+                        "to ", 
+                        tags$b(input$reportDateRange[2]),
+                        "."),
+                tags$br(),
+                tags$br()
+        ))
         
         output$clickHelp = renderUI(tags$div(
                 tags$br(),
                 tags$span(
                         "Tip: click",
                         tags$b("inside"),
-                        " a bar section to view the individual commits it's comprised of."
+                        " the bar sections to view the individual commits the comprise them."
                 )
         ))
         
@@ -97,6 +111,7 @@ shinyServer(function(input, output, clientData, session) {
                                 ),
                                 tabPanel(
                                         "Raw-Data",
+                                        htmlOutput("rawDataTableHelp"),
                                         dataTableOutput("rawDataTable")
                                 )
                         )
@@ -155,7 +170,9 @@ shinyServer(function(input, output, clientData, session) {
         })
         
         output$rawDataTable = renderDataTable({
-                rawData[project == input$project, .(
+                min = as.numeric(as.POSIXct(input$reportDateRange[1]))
+                max = as.numeric(as.POSIXct(input$reportDateRange[2]))
+                rawData[project == input$project & date >= min & date <= max, .(
                         CommitId = commitId,
                         Date = as.Date(
                                 as.POSIXct(date, origin =  "1970-01-01"),
