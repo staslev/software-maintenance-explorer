@@ -6,20 +6,11 @@
 
 library(shiny)
 library(plotly)
-library(ggplot2)
 
 shinyServer(function(input, output, clientData, session) {
         vals = reactiveValues()
         vals$prjStart = NULL
         vals$prjEnd = NULL
-        
-        output$event <- renderPrint({
-                d <- event_data("plotly_hover")
-                if (is.null(d))
-                        "Hover on a point!"
-                else
-                        d
-        })
         
         output$reportPeriod = renderUI({
                 if (!isTruthy(vals$prjStart) || !isTruthy(vals$prjEnd)) {
@@ -61,7 +52,7 @@ shinyServer(function(input, output, clientData, session) {
                 
                 sliderInput(
                         "reportWindowSize",
-                        "Activity Window",
+                        "Activity Bucket",
                         min = step,
                         max = max,
                         value = value,
@@ -81,7 +72,14 @@ shinyServer(function(input, output, clientData, session) {
         })
         
         
-        output$tabs = renderText("Please select a project ...")
+        output$clickHelp = renderUI(tags$div(
+                tags$br(),
+                tags$span(
+                        "Tip: click",
+                        tags$b("inside"),
+                        " a bar section to view the individual commits it's comprised of."
+                )
+        ))
         
         observe({
                 output$tabs <- renderUI({
@@ -89,7 +87,9 @@ shinyServer(function(input, output, clientData, session) {
                                 id = "menu",
                                 tabPanel(
                                         "Project-Overview",
-                                        plotlyOutput("maintBars")
+                                        htmlOutput("clickHelp"),
+                                        plotlyOutput("maintBars"),
+                                        dataTableOutput("selectedData")
                                 ),
                                 tabPanel(
                                         "Developer-Info",
@@ -101,65 +101,111 @@ shinyServer(function(input, output, clientData, session) {
                                 )
                         )
                 })
+        })
+        
+        output$maintBars = renderPlotly({
+                if (!isTruthy(input$reportWindowSize)) {
+                        return(NULL)
+                }
                 
+                window = input$reportWindowSize * 24 * 60 * 60
+                min = as.numeric(as.POSIXct(input$reportDateRange[1]))
+                max = as.numeric(as.POSIXct(input$reportDateRange[2]))
+                bucketize = function(date) {
+                        as.Date(
+                                as.POSIXct(min + (
+                                        floor((date - min) / window) * window
+                                ), origin = "1970-01-01")
+                        )
+                }
+                agg = rawData[project == input$project &
+                                      date >= min &
+                                      date <= max,
+                              .(
+                                      Adaptive = sum(predictedCat == "a"),
+                                      Corrective = sum(predictedCat == "c"),
+                                      Perfective = sum(predictedCat == "p")
+                              ),
+                              by = list(date = bucketize(date))]
                 
-                output$maintBars = renderPlotly({
-                        if (!isTruthy(input$reportWindowSize)) {
-                                return(NULL)
-                        }
-                        
-                        window = input$reportWindowSize * 24 * 60 * 60
-                        min = as.numeric(as.POSIXct(input$reportDateRange[1]))
-                        max = as.numeric(as.POSIXct(input$reportDateRange[2]))
-                        agg = rawData[project == input$project &
-                                              date >= min &
-                                              date <= max,
-                                      .(
-                                              Adaptive = sum(predictedCat == "a"),
-                                              Corrective = sum(predictedCat == "c"),
-                                              Perfective = sum(predictedCat == "p")
-                                      ),
-                                      by = list(date = as.Date(
-                                              as.POSIXct(min + (
-                                                      floor((date - min) / window) * window
-                                              ), origin = "1970-01-01")
-                                      ))]
-                        
-                        plot_ly(
-                                agg,
-                                x = ~ date,
-                                y = ~ Adaptive,
-                                name = 'Adaptive',
-                                type = 'bar'
-                        ) %>%
-                                add_trace(y = ~ Perfective,
-                                          name = 'Perfective') %>%
-                                add_trace(y = ~ Corrective,
-                                          name = 'Corrective') %>%
-                                layout(
-                                        yaxis = list(title = 'Commits'),
-                                        barmode = 'stack',
-                                        xaxis = list(
-                                                tickvals = agg$date,
-                                                tickangle = 45,
-                                                title = "",
-                                                tickformat = "%d-%m-%Y"
-                                        ),
-                                        margin = list(b = 150)
-                                )  %>%
-                                config(displayModeBar = F)
-                })
-                output$myText1 = renderText({
-                        "bla bla bla1 "
-                })
-                output$rawDataTable = renderDataTable({
-                        x  = 1
-                        rawData[project == input$project, .(
-                                CommitId = commitId,
-                                Date = as.Date(as.POSIXct(date, origin =  "1970-01-01"), '%m/%d/%y'),
-                                Class = predictedCat,
-                                Comment = gsub("\\[PATCH \\d+/\\d+\\] ", "", comment)
-                        )]
-                }, options = list(searching = FALSE, lengthChange = FALSE))
+                plot_ly(
+                        agg,
+                        x = ~ date,
+                        y = ~ Adaptive,
+                        name = 'Adaptive',
+                        type = 'bar',
+                        source = "subset"
+                ) %>%
+                        add_trace(y = ~ Perfective,
+                                  name = 'Perfective') %>%
+                        add_trace(y = ~ Corrective,
+                                  name = 'Corrective') %>%
+                        layout(
+                                yaxis = list(title = 'Commits'),
+                                barmode = 'stack',
+                                xaxis = list(
+                                        tickvals = agg$date,
+                                        tickangle = 45,
+                                        title = "",
+                                        tickformat = "%d-%m-%Y"
+                                ),
+                                margin = list(b = 150)
+                        )  %>%
+                        config(displayModeBar = F)
+        })
+        
+        output$rawDataTable = renderDataTable({
+                rawData[project == input$project, .(
+                        CommitId = commitId,
+                        Date = as.Date(
+                                as.POSIXct(date, origin =  "1970-01-01"),
+                                '%m/%d/%y'
+                        ),
+                        Class = predictedCat,
+                        Comment = gsub("\\[PATCH \\d+/\\d+\\] ", "", comment)
+                )]
+        }, options = list(
+                searching = FALSE,
+                lengthChange = FALSE
+        ))
+        
+        output$selectedData <- renderDataTable({
+                s <- event_data("plotly_click", source = "subset")
+                
+                if (length(s) == 0) {
+                        return(NULL)
+                }
+                
+                window = input$reportWindowSize * 24 * 60 * 60
+                min = as.numeric(as.POSIXct(input$reportDateRange[1]))
+                max = as.numeric(as.POSIXct(input$reportDateRange[2]))
+                toBucket = function(date) {
+                        as.Date(as.POSIXct(min + (floor((date - min) / window) * window), origin = "1970-01-01"))
+                }
+                chosenDate = as.Date(s$x)
+                
+                agg = rawData[project == input$project &
+                                      date >= min &
+                                      date <= max &
+                                      toBucket(date) == chosenDate,
+                              .(
+                                      CommitId = commitId,
+                                      Date = as.Date(as.POSIXct(date, origin = "1970-01-01")),
+                                      Class = predictedCat,
+                                      Comment = gsub("\\[PATCH \\d+/\\d+\\] ",
+                                                     "",
+                                                     comment)
+                              )]
+                
+                chosenClass = ifelse(s$curveNumber == 0, "a", ifelse(s$curveNumber == 1, "p", "c"))
+                agg[as.character(Class) == chosenClass,]
+        },
+        options = list(
+                searching = FALSE,
+                lengthChange = FALSE
+        ))
+        
+        output$myText1 = renderText({
+                "bla bla bla1 "
         })
 })
