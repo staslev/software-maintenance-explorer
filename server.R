@@ -11,6 +11,7 @@ shinyServer(function(input, output, clientData, session) {
         vals = reactiveValues()
         vals$prjStart = NULL
         vals$prjEnd = NULL
+        vals$devId = NULL
         
         output$reportPeriod = renderUI({
                 if (!isTruthy(vals$prjStart) || !isTruthy(vals$prjEnd)) {
@@ -86,7 +87,16 @@ shinyServer(function(input, output, clientData, session) {
                 tags$br()
         ))
         
-        output$clickHelp = renderUI(tags$div(
+        output$prj_clickHelp = renderUI(tags$div(
+                tags$br(),
+                tags$span(
+                        "Tip: click",
+                        tags$b("inside"),
+                        " the bar sections to view the individual commits the comprise them."
+                )
+        ))
+        
+        output$dev_clickHelp = renderUI(tags$div(
                 tags$br(),
                 tags$span(
                         "Tip: click",
@@ -100,14 +110,22 @@ shinyServer(function(input, output, clientData, session) {
                         tabsetPanel(
                                 id = "menu",
                                 tabPanel(
-                                        "Project-Evolution",
-                                        htmlOutput("clickHelp"),
-                                        plotlyOutput("maintBars"),
-                                        dataTableOutput("selectedData")
+                                        "Project-Activity",
+                                        htmlOutput("prj_clickHelp"),
+                                        plotlyOutput("prjTabMaintBars"),
+                                        dataTableOutput("prjTabSelectedData")
                                 ),
                                 tabPanel(
-                                        "Developer-Evolution",
-                                        tableOutput("myText1")
+                                        "Contributor-Activity",
+                                        tags$br(),
+                                        radioButtons("devKey",
+                                                     "Identify contributors by:",
+                                                     choices = c("Name only", "Email only", "Both")),
+                                        uiOutput("contributor"),
+                                        htmlOutput("dev_clickHelp"),
+                                        tags$br(),
+                                        plotlyOutput("devTabMaintBars"),
+                                        dataTableOutput("devTabSelectedData")
                                 ),
                                 tabPanel(
                                         "Raw-Data",
@@ -118,7 +136,38 @@ shinyServer(function(input, output, clientData, session) {
                 })
         })
         
-        output$maintBars = renderPlotly({
+        output$contributor = renderUI({
+                if(input$devKey == "Name only") {
+                        vals$devId = Vectorize(function(name, email) {
+                                name
+                        })
+                        selectInput("contributor",
+                                    "Contributor name:",
+                                    choices = rawData[, .(name = unique(authorName))][order(name)]$name,
+                                    width = "100%"
+                        )
+                } else if(input$devKey == "Email only") {
+                        vals$devId = Vectorize(function(name, email) {
+                                email
+                        })
+                        selectInput("contributor",
+                                    "Contributor name:",
+                                    choices = rawData[, .(name = unique(authorMail))][order(name)]$name,
+                                    width = "100%"
+                        )
+                } else {
+                        vals$devId = Vectorize(function(name, email) {
+                                paste(name, "(", email, ")")
+                        })
+                        selectInput("contributor",
+                                    "Contributor name:",
+                                    choices = rawData[, .(name = unique(paste(authorName, "(", authorMail, ")")))][order(name)]$name,
+                                    width = "100%"
+                        )
+                }
+        })
+        
+        output$prjTabMaintBars = renderPlotly({
                 if (!isTruthy(input$reportWindowSize)) {
                         return(NULL)
                 }
@@ -149,7 +198,60 @@ shinyServer(function(input, output, clientData, session) {
                         y = ~ Adaptive,
                         name = 'Adaptive',
                         type = 'bar',
-                        source = "subset"
+                        source = "prj_subset"
+                ) %>%
+                        add_trace(y = ~ Perfective,
+                                  name = 'Perfective') %>%
+                        add_trace(y = ~ Corrective,
+                                  name = 'Corrective') %>%
+                        layout(
+                                yaxis = list(title = 'Commits'),
+                                barmode = 'stack',
+                                xaxis = list(
+                                        tickvals = agg$date,
+                                        tickangle = 45,
+                                        title = "",
+                                        tickformat = "%d-%m-%Y"
+                                ),
+                                margin = list(b = 150)
+                        )  %>%
+                        config(displayModeBar = F)
+        })
+        
+        output$devTabMaintBars = renderPlotly({
+                if (!isTruthy(input$reportWindowSize) || !isTruthy(vals$devId)) {
+                        return(NULL)
+                }
+                
+                window = input$reportWindowSize * 24 * 60 * 60
+                min = as.numeric(as.POSIXct(input$reportDateRange[1]))
+                max = as.numeric(as.POSIXct(input$reportDateRange[2]))
+                bucketize = function(date) {
+                        as.Date(
+                                as.POSIXct(min + (
+                                        floor((date - min) / window) * window
+                                ), origin = "1970-01-01")
+                        )
+                }
+                
+                agg = rawData[project == input$project &
+                                      date >= min &
+                                      date <= max &
+                                      vals$devId(authorName, authorMail) == input$contributor,
+                              .(
+                                      Adaptive = sum(predictedCat == "a"),
+                                      Corrective = sum(predictedCat == "c"),
+                                      Perfective = sum(predictedCat == "p")
+                              ),
+                              by = list(date = bucketize(date))]
+                
+                plot_ly(
+                        agg,
+                        x = ~ date,
+                        y = ~ Adaptive,
+                        name = 'Adaptive',
+                        type = 'bar',
+                        source = "dev_subset"
                 ) %>%
                         add_trace(y = ~ Perfective,
                                   name = 'Perfective') %>%
@@ -174,6 +276,7 @@ shinyServer(function(input, output, clientData, session) {
                 max = as.numeric(as.POSIXct(input$reportDateRange[2]))
                 rawData[project == input$project & date >= min & date <= max, .(
                         CommitId = commitId,
+                        Contributor = authorMail,
                         Date = as.Date(
                                 as.POSIXct(date, origin =  "1970-01-01"),
                                 '%m/%d/%y'
@@ -186,8 +289,8 @@ shinyServer(function(input, output, clientData, session) {
                 lengthChange = FALSE
         ))
         
-        output$selectedData <- renderDataTable({
-                s <- event_data("plotly_click", source = "subset")
+        output$prjTabSelectedData <- renderDataTable({
+                s <- event_data("plotly_click", source = "prj_subset")
                 
                 if (length(s) == 0) {
                         return(NULL)
@@ -205,6 +308,44 @@ shinyServer(function(input, output, clientData, session) {
                                       date >= min &
                                       date <= max &
                                       toBucket(date) == chosenDate,
+                              .(
+                                      CommitId = commitId,
+                                      Contributor = authorMail,
+                                      Date = as.Date(as.POSIXct(date, origin = "1970-01-01")),
+                                      Class = predictedCat,
+                                      Comment = gsub("\\[PATCH \\d+/\\d+\\] ",
+                                                     "",
+                                                     comment)
+                              )]
+                
+                chosenClass = ifelse(s$curveNumber == 0, "a", ifelse(s$curveNumber == 1, "p", "c"))
+                agg[as.character(Class) == chosenClass,]
+        },
+        options = list(
+                searching = FALSE,
+                lengthChange = FALSE
+        ))
+        
+        output$devTabSelectedData <- renderDataTable({
+                s <- event_data("plotly_click", source = "dev_subset")
+                
+                if (length(s) == 0) {
+                        return(NULL)
+                }
+                
+                window = input$reportWindowSize * 24 * 60 * 60
+                min = as.numeric(as.POSIXct(input$reportDateRange[1]))
+                max = as.numeric(as.POSIXct(input$reportDateRange[2]))
+                toBucket = function(date) {
+                        as.Date(as.POSIXct(min + (floor((date - min) / window) * window), origin = "1970-01-01"))
+                }
+                chosenDate = as.Date(s$x)
+                
+                agg = rawData[project == input$project &
+                                      date >= min &
+                                      date <= max &
+                                      toBucket(date) == chosenDate &
+                                      vals$devId(authorName, authorMail) == input$contributor,
                               .(
                                       CommitId = commitId,
                                       Date = as.Date(as.POSIXct(date, origin = "1970-01-01")),
