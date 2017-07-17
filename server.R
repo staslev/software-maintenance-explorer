@@ -312,13 +312,13 @@ shinyServer(function(input, output, clientData, session) {
                                       CommitId = commitId,
                                       Contributor = authorMail,
                                       Date = as.Date(as.POSIXct(date, origin = "1970-01-01")),
-                                      Class = predictedCat,
+                                      Class = ifelse(predictedCat == "a", "Adaptive", ifelse(predictedCat == "c", "Corrective", "Perfective")),
                                       Comment = gsub("\\[PATCH \\d+/\\d+\\] ",
                                                      "",
                                                      comment)
                               )]
                 
-                chosenClass = ifelse(s$curveNumber == 0, "a", ifelse(s$curveNumber == 1, "p", "c"))
+                chosenClass = ifelse(s$curveNumber == 0, "Adaptive", ifelse(s$curveNumber == 1, "Perfective", "Corrective"))
                 agg[as.character(Class) == chosenClass,]
         },
         options = list(
@@ -349,13 +349,13 @@ shinyServer(function(input, output, clientData, session) {
                               .(
                                       CommitId = commitId,
                                       Date = as.Date(as.POSIXct(date, origin = "1970-01-01")),
-                                      Class = predictedCat,
+                                      Class = ifelse(predictedCat == "a", "Adaptive", ifelse(predictedCat == "c", "Corrective", "Perfective")),
                                       Comment = gsub("\\[PATCH \\d+/\\d+\\] ",
                                                      "",
                                                      comment)
                               )]
                 
-                chosenClass = ifelse(s$curveNumber == 0, "a", ifelse(s$curveNumber == 1, "p", "c"))
+                chosenClass = ifelse(s$curveNumber == 0, "Adaptive", ifelse(s$curveNumber == 1, "Perfective", "Corrective"))
                 agg[as.character(Class) == chosenClass,]
         },
         options = list(
