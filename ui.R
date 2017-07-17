@@ -58,13 +58,13 @@ shinyUI(navbarPage(
                                  tags$ol(
                                          tags$li(
                                                  tags$a(href = "https://www.linkedin.com/in/staslevin/", "Stanislav Levin"),
-                                                 ", and ",
+                                                 " and ",
                                                  tags$a(href = "http://www.cs.tau.ac.il/~amiramy/", "Amiram Yehudai"),
                                                  ". \"Using Temporal and Semantic Developer-Level Information to Predict Maintenance Activity Profiles.\" Software Maintenance and Evolution (ICSME), 2016 IEEE International Conference on. IEEE, 2016."
                                          ),
                                          tags$li(
                                                  tags$a(href = "https://www.linkedin.com/in/staslevin/", "Stanislav Levin"),
-                                                 ", and ",
+                                                 " and ",
                                                  tags$a(href = "http://www.cs.tau.ac.il/~amiramy/", "Amiram Yehudai"),
                                                  ". \"Boosting Automatic Commit Classification Into Maintenance Activities By Utilizing Source Code Changes.\"",
                                                  tags$em("Submitted for publication, 2017.")
