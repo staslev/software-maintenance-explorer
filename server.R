@@ -142,7 +142,7 @@ shinyServer(function(input, output, clientData, session) {
                                 name
                         })
                         selectInput("contributor",
-                                    "Contributor name:",
+                                    "Contributor id:",
                                     choices = rawData[, .(name = unique(authorName))][order(name)]$name,
                                     width = "100%"
                         )
