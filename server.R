@@ -8,10 +8,17 @@ library(shiny)
 library(plotly)
 
 shinyServer(function(input, output, clientData, session) {
-        vals = reactiveValues()
-        vals$prjStart = NULL
-        vals$prjEnd = NULL
-        vals$devId = NULL
+        
+        reactiveVals = reactiveValues(prjStart = NULL, prjEnd = NULL, devId = NULL)
+        
+        observe({
+                prj = input$project
+                start = rawData[project == prj, min(date)]
+                end = rawData[project == prj, max(date)]
+                origin = "1970-01-01"
+                reactiveVals$prjStart = as.Date(as.POSIXct(start, origin = origin))
+                reactiveVals$prjEnd = as.Date(as.POSIXct(end, origin = origin))
+        })
         
         output$downloadData <- downloadHandler(
                 filename = function() {
@@ -23,23 +30,25 @@ shinyServer(function(input, output, clientData, session) {
         )
         
         output$reportPeriod = renderUI({
-                if (!isTruthy(vals$prjStart) || !isTruthy(vals$prjEnd)) {
+                
+                if (!isTruthy(reactiveVals$prjStart) || !isTruthy(reactiveVals$prjEnd)) {
                         return(NULL)
                 }
                 
                 dateRangeInput(
                         "reportDateRange",
                         "Period of interest",
-                        start  = vals$prjStart,
-                        min  = vals$prjStart,
-                        end    = vals$prjEnd,
-                        max    = vals$prjEnd,
+                        start  = reactiveVals$prjStart,
+                        min  = reactiveVals$prjStart,
+                        end    = reactiveVals$prjEnd,
+                        max    = reactiveVals$prjEnd,
                         format = "dd/mm/yy",
                         separator = " - "
                 )
         })
         
         output$reportWindow = renderUI({
+                
                 if (!isTruthy(input$reportDateRange) ||
                     !isTruthy(input$reportDateRange[1]) ||
                     !isTruthy(input$reportDateRange[2])) {
@@ -63,7 +72,7 @@ shinyServer(function(input, output, clientData, session) {
                 sliderInput(
                         "reportWindowSize",
                         "Activity bucket",
-                        min = step,
+                        min = step * 4,
                         max = max,
                         value = value,
                         post = " days",
@@ -71,15 +80,7 @@ shinyServer(function(input, output, clientData, session) {
                         ticks = FALSE
                 )
         })
-        
-        observe({
-                project = input$project
-                start = rawData[project == project, min(date)]
-                end = rawData[project == project, max(date)]
-                origin = "1970-01-01"
-                vals$prjStart = as.Date(as.POSIXct(start, origin = origin))
-                vals$prjEnd = as.Date(as.POSIXct(end, origin = origin))
-        })
+
         
         observe({
                 output$tabs <- renderUI({
@@ -125,7 +126,7 @@ shinyServer(function(input, output, clientData, session) {
         
         output$contributor = renderUI({
                 if (input$devKey == "Name only") {
-                        vals$devId = Vectorize(function(name, email) {
+                        reactiveVals$devId = Vectorize(function(name, email) {
                                 name
                         })
                         selectInput(
@@ -135,7 +136,7 @@ shinyServer(function(input, output, clientData, session) {
                                 width = "100%"
                         )
                 } else if (input$devKey == "Email only") {
-                        vals$devId = Vectorize(function(name, email) {
+                        reactiveVals$devId = Vectorize(function(name, email) {
                                 email
                         })
                         selectInput(
@@ -145,7 +146,7 @@ shinyServer(function(input, output, clientData, session) {
                                 width = "100%"
                         )
                 } else {
-                        vals$devId = Vectorize(function(name, email) {
+                        reactiveVals$devId = Vectorize(function(name, email) {
                                 paste(name, "(", email, ")")
                         })
                         selectInput(
@@ -209,7 +210,7 @@ shinyServer(function(input, output, clientData, session) {
         })
         
         output$devTabMaintBars = renderPlotly({
-                if (!isTruthy(input$reportWindowSize) || !isTruthy(vals$devId)) {
+                if (!isTruthy(input$reportWindowSize) || !isTruthy(reactiveVals$devId)) {
                         return(NULL)
                 }
                 
@@ -225,7 +226,7 @@ shinyServer(function(input, output, clientData, session) {
                 agg = rawData[project == input$project &
                                       date >= min &
                                       date <= max &
-                                      vals$devId(authorName, authorMail) == input$contributor,
+                                      reactiveVals$devId(authorName, authorMail) == input$contributor,
                               .(
                                       Adaptive = sum(predictedCat == "a"),
                                       Corrective = sum(predictedCat == "c"),
@@ -264,6 +265,7 @@ shinyServer(function(input, output, clientData, session) {
                 max = as.numeric(as.POSIXct(input$reportDateRange[2]))
                 rawData[, .(
                         CommitId = commitId,
+                        Project = project,
                         Contributor = authorMail,
                         Date = as.Date(
                                 as.POSIXct(date, origin =  "1970-01-01"),
@@ -361,7 +363,7 @@ shinyServer(function(input, output, clientData, session) {
                                       date >= min &
                                       date <= max &
                                       toBucket(date) == chosenDate &
-                                      vals$devId(authorName, authorMail) == input$contributor,
+                                      reactiveVals$devId(authorName, authorMail) == input$contributor,
                               .(
                                       CommitId = commitId,
                                       Date = as.Date(as.POSIXct(date, origin = "1970-01-01")),

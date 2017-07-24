@@ -1,3 +1,10 @@
 library(data.table)
-rawData = read.csv(paste0(getwd(),"/","data-vis-final-prj.csv"), sep = "#", header = TRUE, comment.char = '')
+rawData = read.table(
+        paste0(getwd(), "/", "data.csv"),
+        header = TRUE,
+        sep = '#',
+        row.names = NULL,
+        comment.char = "",
+        quote = ""
+)
 setDT(rawData)
