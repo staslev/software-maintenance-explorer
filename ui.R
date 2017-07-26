@@ -26,6 +26,7 @@ shinyUI(navbarPage(
                                 column(width = 4, uiOutput("reportPeriod")),
                                 column(width = 4, uiOutput("reportWindow"))
                         ),
+                        fluidRow(column(width = 12, uiOutput("prjLink"))),
                         fluidRow(column(width = 12, tags$br())),
                         fluidRow(column(width = 12, uiOutput("tabs")))
                 )
