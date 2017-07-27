@@ -10,15 +10,17 @@ library(plotly)
 shinyServer(function(input, output, clientData, session) {
         reactiveVals = reactiveValues(prjStart = NULL,
                                       prjEnd = NULL,
-                                      devId = NULL)
+                                      prjData = NULL)
         
         observe({
                 prj = input$project
-                start = rawData[project == prj, min(date)]
-                end = rawData[project == prj, max(date)]
+                reactiveVals$prjData = rawData[project == prj,]
+                start = reactiveVals$prjData[, min(date)]
+                end = reactiveVals$prjData[, max(date)]
                 origin = "1970-01-01"
                 reactiveVals$prjStart = as.Date(as.POSIXct(start, origin = origin))
                 reactiveVals$prjEnd = as.Date(as.POSIXct(end, origin = origin))
+                
         })
         
         output$downloadData <- downloadHandler(
@@ -26,7 +28,29 @@ shinyServer(function(input, output, clientData, session) {
                         "maintenance-activity-data.csv"
                 },
                 content = function(file) {
-                        write.csv(rawData, file, row.names = FALSE)
+                        data = rawData[, .(
+                                CommitId = commitId,
+                                Project = project,
+                                Contributor = authorMail,
+                                Date = as.Date(
+                                        as.POSIXct(date, origin =  "1970-01-01"),
+                                        '%m/%d/%y'
+                                ),
+                                MaintenanceType = as.factor(
+                                        ifelse(
+                                                predictedCat == "a",
+                                                "Adaptive",
+                                                ifelse(
+                                                        predictedCat == "c",
+                                                        "Corrective",
+                                                        "Perfective"
+                                                )
+                                        )
+                                ),
+                                Comment = gsub("\\[PATCH \\d+/\\d+\\] ", "", comment)
+                        )]
+                        
+                        write.csv(data, file, row.names = FALSE)
                 }
         )
         
@@ -82,11 +106,9 @@ shinyServer(function(input, output, clientData, session) {
         })
         
         output$prjLink = renderUI({
-                tags$p(
-                        "Visit ",
-                        tags$a(href = repoInfo[project == input$project, repo], input$project),
-                        " on GitHub."
-                )
+                tags$p("Visit ",
+                       tags$a(href = repoInfo[project == input$project, repo], input$project),
+                       " on GitHub.")
         })
         
         output$tabs <- renderUI({
@@ -132,33 +154,24 @@ shinyServer(function(input, output, clientData, session) {
         output$contributor = renderUI({
                 prjName = input$project
                 if (input$devKey == "Name only") {
-                        reactiveVals$devId = Vectorize(function(name, email) {
-                                name
-                        })
                         selectInput(
                                 "contributor",
                                 "Contributor id:",
-                                choices = rawData[project == prjName, .(name = unique(authorName))][order(name)]$name,
+                                choices = reactiveVals$prjData[, .(name = unique(authorName))]$name,
                                 width = "100%"
                         )
                 } else if (input$devKey == "Email only") {
-                        reactiveVals$devId = Vectorize(function(name, email) {
-                                email
-                        })
                         selectInput(
                                 "contributor",
                                 "Contributor name:",
-                                choices = rawData[project == prjName, .(name = unique(authorMail))][order(name)]$name,
+                                choices = reactiveVals$prjData[, .(name = unique(authorMail))]$name,
                                 width = "100%"
                         )
                 } else {
-                        reactiveVals$devId = Vectorize(function(name, email) {
-                                paste(name, "(", email, ")")
-                        })
                         selectInput(
                                 "contributor",
                                 "Contributor name:",
-                                choices = rawData[project == prjName, .(name = unique(
+                                choices = reactiveVals$prjData[, .(name = unique(
                                         paste(authorName, "(", authorMail, ")")
                                 ))]$name,
                                 width = "100%"
@@ -179,15 +192,14 @@ shinyServer(function(input, output, clientData, session) {
                                 floor((date - min) / window) * window
                         ), origin = "1970-01-01"))
                 }
-                agg = rawData[project == input$project &
-                                      date >= min &
-                                      date <= max,
-                              .(
-                                      Adaptive = sum(predictedCat == "a"),
-                                      Corrective = sum(predictedCat == "c"),
-                                      Perfective = sum(predictedCat == "p")
-                              ),
-                              by = list(date = bucketize(date))]
+                agg = reactiveVals$prjData[date >= min &
+                                                   date <= max,
+                                           .(
+                                                   Adaptive = sum(predictedCat == "a"),
+                                                   Corrective = sum(predictedCat == "c"),
+                                                   Perfective = sum(predictedCat == "p")
+                                           ),
+                                           by = list(date = bucketize(date))]
                 
                 plot_ly(
                         agg,
@@ -217,7 +229,7 @@ shinyServer(function(input, output, clientData, session) {
         
         output$devTabMaintBars = renderPlotly({
                 if (!isTruthy(input$reportWindowSize) ||
-                    !isTruthy(reactiveVals$devId)) {
+                    !isTruthy(input$contributor)) {
                         return(NULL)
                 }
                 
@@ -229,16 +241,39 @@ shinyServer(function(input, output, clientData, session) {
                                 floor((date - min) / window) * window
                         ), origin = "1970-01-01"))
                 }
-                prjData = rawData[project == input$project, ]
-                agg = prjData[date >= min &
-                                      date <= max &
-                                      reactiveVals$devId(authorName, authorMail) == input$contributor,
-                              .(
-                                      Adaptive = sum(predictedCat == "a"),
-                                      Corrective = sum(predictedCat == "c"),
-                                      Perfective = sum(predictedCat == "p")
-                              ),
-                              by = list(date = bucketize(date))]
+                
+                if (input$devKey == "Name only") {
+                        filteredByContributor = reactiveVals$prjData[authorName == input$contributor,]
+                        agg = filteredByContributor[date >= min &
+                                                            date <= max,
+                                                    .(
+                                                            Adaptive = sum(predictedCat == "a"),
+                                                            Corrective = sum(predictedCat == "c"),
+                                                            Perfective = sum(predictedCat == "p")
+                                                    ),
+                                                    by = list(date = bucketize(date))]
+                } else if (input$devKey == "Email only") {
+                        filteredByContributor = reactiveVals$prjData[authorMail == input$contributor,]
+                        agg = filteredByContributor[date >= min &
+                                                            date <= max,
+                                                    .(
+                                                            Adaptive = sum(predictedCat == "a"),
+                                                            Corrective = sum(predictedCat == "c"),
+                                                            Perfective = sum(predictedCat == "p")
+                                                    ),
+                                                    by = list(date = bucketize(date))]
+                } else {
+                        filteredByContributor = reactiveVals$prjData[paste(authorName, "(", authorMail, ")") == input$contributor,]
+                        agg = filteredByContributor[date >= min &
+                                                            date <= max,
+                                                    .(
+                                                            Adaptive = sum(predictedCat == "a"),
+                                                            Corrective = sum(predictedCat == "c"),
+                                                            Perfective = sum(predictedCat == "p")
+                                                    ),
+                                                    by = list(date = bucketize(date))]
+                }
+                
                 
                 plot_ly(
                         agg,
@@ -266,38 +301,39 @@ shinyServer(function(input, output, clientData, session) {
                         config(displayModeBar = F)
         })
         
-        output$rawDataTable = DT::renderDataTable({
-                min = as.numeric(as.POSIXct(input$reportDateRange[1]))
-                max = as.numeric(as.POSIXct(input$reportDateRange[2]))
-                rawData[, .(
-                        CommitId = commitId,
-                        Project = project,
-                        Contributor = authorMail,
-                        Date = as.Date(
-                                as.POSIXct(date, origin =  "1970-01-01"),
-                                '%m/%d/%y'
-                        ),
-                        Class = as.factor(
-                                ifelse(
-                                        predictedCat == "a",
-                                        "Adaptive",
+        observeEvent(input$exploreRawData, {
+                output$rawDataTable = DT::renderDataTable({
+                        rawData[, .(
+                                CommitId = commitId,
+                                Project = project,
+                                Contributor = authorMail,
+                                Date = as.Date(
+                                        as.POSIXct(date, origin =  "1970-01-01"),
+                                        '%m/%d/%y'
+                                ),
+                                MaintenanceType = as.factor(
                                         ifelse(
-                                                predictedCat == "c",
-                                                "Corrective",
-                                                "Perfective"
+                                                predictedCat == "a",
+                                                "Adaptive",
+                                                ifelse(
+                                                        predictedCat == "c",
+                                                        "Corrective",
+                                                        "Perfective"
+                                                )
                                         )
-                                )
-                        ),
-                        Comment = gsub("\\[PATCH \\d+/\\d+\\] ", "", comment)
-                )]
-        },
-        filter = "top",
-        rownames = F,
-        options = list(
-                searching = TRUE,
-                lengthChange = FALSE,
-                autoWidth = FALSE
-        ))
+                                ),
+                                Comment = gsub("\\[PATCH \\d+/\\d+\\] ", "", comment)
+                        )]
+                },
+                filter = "top",
+                rownames = F,
+                options = list(
+                        searching = TRUE,
+                        lengthChange = FALSE,
+                        autoWidth = FALSE
+                ))
+        })
+        
         
         observe({
                 clickData <- event_data("plotly_click", source = "prj_subset")
@@ -315,28 +351,27 @@ shinyServer(function(input, output, clientData, session) {
                         ), origin = "1970-01-01"))
                 }
                 chosenDate = as.Date(clickData$x)
-                
-                agg = rawData[project == isolate(input$project) &
-                                      date >= min &
-                                      date <= max &
-                                      toBucket(date) == chosenDate,
-                              .(
-                                      CommitId = commitId,
-                                      Contributor = authorMail,
-                                      Date = as.Date(as.POSIXct(date, origin = "1970-01-01")),
-                                      Class = ifelse(
-                                              predictedCat == "a",
-                                              "Adaptive",
-                                              ifelse(
-                                                      predictedCat == "c",
-                                                      "Corrective",
-                                                      "Perfective"
-                                              )
-                                      ),
-                                      Comment = gsub("\\[PATCH \\d+/\\d+\\] ",
-                                                     "",
-                                                     comment)
-                              )]
+                bla = rawData[project == isolate(input$project),]
+                agg = bla[date >= min &
+                                  date <= max &
+                                  toBucket(date) == chosenDate,
+                          .(
+                                  CommitId = commitId,
+                                  Contributor = authorMail,
+                                  Date = as.Date(as.POSIXct(date, origin = "1970-01-01")),
+                                  Class = ifelse(
+                                          predictedCat == "a",
+                                          "Adaptive",
+                                          ifelse(
+                                                  predictedCat == "c",
+                                                  "Corrective",
+                                                  "Perfective"
+                                          )
+                                  ),
+                                  Comment = gsub("\\[PATCH \\d+/\\d+\\] ",
+                                                 "",
+                                                 comment)
+                          )]
                 
                 chosenClass = ifelse(
                         clickData$curveNumber == 0,
@@ -348,19 +383,16 @@ shinyServer(function(input, output, clientData, session) {
                         )
                 )
                 
-                tblData = agg[as.character(Class) == chosenClass,]
+                tblData = agg[as.character(Class) == chosenClass, ]
                 
-                if(nrow(tblData) == 0) {
+                if (nrow(tblData) == 0) {
                         return(NULL)
                 }
                 
                 showModal(
                         modalDialog(
-                                DT::renderDataTable(
-                                        tblData[, .(CommitId, Comment)],
-                                        selection='none'
-                                        
-                                ),
+                                DT::renderDataTable(tblData[, .(CommitId, Comment)],
+                                                    selection = 'none'),
                                 title = paste0(
                                         "The ",
                                         isolate(input$project),
@@ -396,29 +428,35 @@ shinyServer(function(input, output, clientData, session) {
                         ), origin = "1970-01-01"))
                 }
                 chosenDate = as.Date(clickData$x)
+                dev = isolate(input$contributor)
+                if (input$devKey == "Name only") {
+                        bla = reactiveVals$prjData[authorName == dev, ]
+                        
+                } else if (input$devKey == "Email only") {
+                        bla = reactiveVals$prjData[authorMail == dev, ]
+                } else {
+                        bla = reactiveVals$prjData[paste(authorName, "(", authorMail, ")") == dev, ]
+                }
                 
-                prjName = isolate(input$project)
-                prjData = rawData[project == prjName, ]
-                agg = prjData[date >= min &
-                                      date <= max &
-                                      toBucket(date) == chosenDate &
-                                      reactiveVals$devId(authorName, authorMail) == isolate(input$contributor),
-                              .(
-                                      CommitId = commitId,
-                                      Date = as.Date(as.POSIXct(date, origin = "1970-01-01")),
-                                      Class = ifelse(
-                                              predictedCat == "a",
-                                              "Adaptive",
-                                              ifelse(
-                                                      predictedCat == "c",
-                                                      "Corrective",
-                                                      "Perfective"
-                                              )
-                                      ),
-                                      Comment = gsub("\\[PATCH \\d+/\\d+\\] ",
-                                                     "",
-                                                     comment)
-                              )]
+                agg = bla[date >= min &
+                                  date <= max &
+                                  toBucket(date) == chosenDate,
+                          .(
+                                  CommitId = commitId,
+                                  Date = as.Date(as.POSIXct(date, origin = "1970-01-01")),
+                                  Class = ifelse(
+                                          predictedCat == "a",
+                                          "Adaptive",
+                                          ifelse(
+                                                  predictedCat == "c",
+                                                  "Corrective",
+                                                  "Perfective"
+                                          )
+                                  ),
+                                  Comment = gsub("\\[PATCH \\d+/\\d+\\] ",
+                                                 "",
+                                                 comment)
+                          )]
                 
                 chosenClass = ifelse(
                         clickData$curveNumber == 0,
@@ -430,9 +468,9 @@ shinyServer(function(input, output, clientData, session) {
                         )
                 )
                 
-                tblData = agg[as.character(Class) == chosenClass,]
+                tblData = agg[as.character(Class) == chosenClass, ]
                 
-                if(nrow(tblData) == 0) {
+                if (nrow(tblData) == 0) {
                         return(NULL)
                 }
                 
@@ -440,7 +478,7 @@ shinyServer(function(input, output, clientData, session) {
                         modalDialog(
                                 DT::renderDataTable(
                                         tblData[, .(CommitId, Comment)],
-                                        selection='none',
+                                        selection = 'none',
                                         options = list(
                                                 searching = FALSE,
                                                 lengthChange = FALSE
