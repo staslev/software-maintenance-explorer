@@ -86,8 +86,8 @@ shinyUI(navbarPage(
                          fluidRow(column(
                                  width = 12,
                                  tags$h3(
-                                         downloadButton('downloadData', 'Download raw data'),
-                                         actionButton("exploreRawData", "Explore raw data") 
+                                         actionButton("exploreRawData", "Explore raw data"),
+                                         downloadButton('downloadData', 'Download raw data')
                                  )
                          )),
                          fluidRow(column(
