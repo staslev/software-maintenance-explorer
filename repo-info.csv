@@ -1,0 +1,13 @@
+project,repo
+kotlin,https://github.com/JetBrains/kotlin
+elasticsearch,https://github.com/elastic/elasticsearch
+vaadin,https://github.com/vaadin
+camel,https://github.com/apache/camel
+hbase,https://github.com/apache/hbase
+fred,https://github.com/freenet/fred
+spring-framework,https://github.com/spring-projects/spring-framework
+drools,https://github.com/kiegroup/drools
+hadoop,https://github.com/apache/hadoop
+gwt,https://github.com/gwtproject/gwt
+tomcat70,https://github.com/apache/tomcat70
+activemq,https://github.com/apache/activemq
