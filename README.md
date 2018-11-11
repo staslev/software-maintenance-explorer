@@ -9,7 +9,7 @@ The software maintenance explorer tool is based on the paper:
 The software maintenance activity explorer tool is aimed to provide an intuitive visualization of 
 software maintenance activities over time. It may be useful to project and team managers 
 who seek to recognize inefficiencies and monitor the health of a software project and its 
-corresponding source code repository. The Software Maintenance Activity Visualizer was built 
+corresponding source code repository. The Software Maintenance Activity Explorer was built 
 with Few's and Cleveland's principles in mind, 
 which advocate for encoding data using visual cues such as variation in size, shape, color, etc'. 
 We chose stacked bar diagrams to visualize data since they allow for an easy comparison both between 
