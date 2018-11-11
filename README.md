@@ -6,7 +6,7 @@ The software maintenance explorer tool is based on the paper:
 
 > Levin, Stanislav, and Amiram Yehudai. "Boosting automatic commit classification into maintenance activities by utilizing source code changes." In Proceedings of the 13th International Conference on Predictive Models and Data Analytics in Software Engineering, pp. 97-106. ACM, 2017.
 
-The software maintenance activity explorer tool is aimed to provide an intuitive visualization of 
+The software maintenance activity explorer tool aims at providing an intuitive visualization of 
 software maintenance activities over time. It may be useful to project and team managers 
 who seek to recognize inefficiencies and monitor the health of a software project and its 
 corresponding source code repository. The Software Maintenance Activity Explorer was built 
